@@ -18,15 +18,22 @@ Vorher einmal das Modpack ganz normal über die CurseForge-App installieren.
 3. Fertig. Unten rechts in der Taskleiste (eventuell hinter dem Pfeil `^`) sitzt jetzt eine Krone. Der Helfer startet
    ab sofort mit Windows.
 
-### Linux
+### CachyOS / Arch
+
+1. [`install_cachyos.sh`](https://github.com/NiklasM-foss/Crowns-Helfer/releases/latest) herunterladen.
+2. Im Terminal (als normaler Benutzer, nicht mit sudo): `bash install_cachyos.sh`
+3. Das Skript installiert Python und Qt für Python, holt den Helfer und richtet ihn ein. Danach sitzt er im
+   Infobereich der Taskleiste und startet als systemd-Benutzerdienst `crowns-helfer-tray.service` mit jeder Anmeldung.
+
+### Andere Linux-Systeme
 
 1. [`crowns-helfer.py`](https://github.com/NiklasM-foss/Crowns-Helfer/releases/latest) herunterladen.
 2. Für das Symbol in der Taskleiste (KDE Plasma und andere) einmal Qt für Python installieren, zum Beispiel:
-   - Arch, CachyOS, Manjaro: `sudo pacman -S python-pyqt6`
    - Debian, Ubuntu, Mint: `sudo apt install python3-pyqt6`
    - Fedora: `sudo dnf install python3-pyqt6`
-3. `python3 crowns-helfer.py` ausführen. Der Helfer sitzt dann im Infobereich und startet mit dem System. Ohne Qt läuft
-   er unsichtbar als Timer im Hintergrund.
+3. `python3 crowns-helfer.py` ausführen. Der Helfer sitzt dann im Infobereich. Läuft die Sitzung über systemd (KDE
+   Plasma, GNOME), startet er als Benutzerdienst `crowns-helfer-tray.service`, sonst über `~/.config/autostart`. Ohne
+   Qt läuft er unsichtbar als systemd-Timer bzw. cron.
 
 Erkannt werden CurseForge-Instanzen und unter Linux auch Prism-Launcher-Instanzen, deren Name mit „Crowns & Cannons“
 beginnt.

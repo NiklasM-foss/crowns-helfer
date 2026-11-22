@@ -7,7 +7,8 @@ Helfer aus dem Downloads-Ordner, sobald der Spieler sie dort hat. Eigene Dateien
 Gleiche Logik wie Crowns-Helfer.bat unter Windows.
 
   python3 crowns-helfer.py            einrichten (Symbol in der Taskleiste mit Qt, sonst systemd-Timer/cron), einmal abgleichen
-  python3 crowns-helfer.py tray       Taskleisten-App starten (KDE Plasma u.a., braucht PyQt6/PySide6/PyQt5)
+  python3 crowns-helfer.py tray       Taskleisten-App starten (KDE Plasma u.a., braucht PyQt6/PySide6/PyQt5);
+                                      Autostart als systemd-Benutzerdienst crowns-helfer-tray.service
   python3 crowns-helfer.py auto       nur abgleichen (so ruft der Timer ihn auf)
   python3 crowns-helfer.py entfernen  Timer und Dateien wieder löschen
 
@@ -58,7 +59,11 @@ def einrichten():
         einst_speichern(e)
         autostart(bool(e.get("autostart", True)))
         tray_laeuft_stoppen()
-        subprocess.Popen([py, str(ziel), "tray"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        gestartet = False
+        if DIENST.exists() and e.get("autostart", True):
+            gestartet = subprocess.run(["systemctl", "--user", "restart", "crowns-helfer-tray.service"], capture_output=True).returncode == 0
+        if not gestartet:
+            subprocess.Popen([py, str(ziel), "tray"], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print("Eingerichtet: Der Helfer sitzt jetzt in der Taskleiste (Infobereich, Krone). Rechtsklick: Status,")
         print("Jetzt aktualisieren, automatische Updates und Autostart an/aus, Beenden.")
         return True
@@ -103,8 +108,9 @@ def timer_entfernen():
 
 
 def entfernen():
+    dienst_entfernen()
     tray_laeuft_stoppen()
-    autostart(False)
+    AUTOSTART.unlink(missing_ok=True)
     if shutil.which("systemctl"):
         subprocess.run(["systemctl", "--user", "disable", "--now", "crowns-helfer.timer"], capture_output=True)
         for n in ("crowns-helfer.service", "crowns-helfer.timer"):
@@ -412,14 +418,47 @@ def einst_speichern(e):
     EINST.write_text(json.dumps(e), encoding="utf-8")
 
 
+DIENST = HOME / ".config/systemd/user/crowns-helfer-tray.service"
+
+
+def systemd_sitzung():
+    """Laeuft die grafische Sitzung ueber systemd (KDE Plasma, GNOME)? Dann startet der Helfer als Benutzerdienst."""
+    if not shutil.which("systemctl"):
+        return False
+    r = subprocess.run(["systemctl", "--user", "is-active", "graphical-session.target"], capture_output=True, text=True)
+    return r.stdout.strip() == "active"
+
+
 def autostart(an):
+    """Mit dem System starten: systemd-Benutzerdienst (neu gestartet nach Absturz), sonst Eintrag in ~/.config/autostart."""
     ziel = ORDNER / "crowns-helfer.py"
+    py = sys.executable or "python3"
+    if systemd_sitzung():
+        AUTOSTART.unlink(missing_ok=True)
+        if an:
+            DIENST.parent.mkdir(parents=True, exist_ok=True)
+            DIENST.write_text("[Unit]\nDescription=Crowns & Cannons Helfer (Taskleiste)\nPartOf=graphical-session.target\n"
+                              "After=graphical-session.target\n\n[Service]\nType=simple\n"
+                              f"ExecStart={py} {ziel} tray\nRestart=on-failure\nRestartSec=10\n\n"
+                              "[Install]\nWantedBy=graphical-session.target\n", encoding="utf-8")
+            subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+            subprocess.run(["systemctl", "--user", "enable", "crowns-helfer-tray.service"], capture_output=True)
+        else:
+            subprocess.run(["systemctl", "--user", "disable", "crowns-helfer-tray.service"], capture_output=True)
+        return
     if an:
         AUTOSTART.parent.mkdir(parents=True, exist_ok=True)
         AUTOSTART.write_text("[Desktop Entry]\nType=Application\nName=Crowns & Cannons Helfer\n"
-                             f"Exec={sys.executable or 'python3'} {ziel} tray\nX-GNOME-Autostart-enabled=true\n", encoding="utf-8")
+                             f"Exec={py} {ziel} tray\nX-GNOME-Autostart-enabled=true\n", encoding="utf-8")
     else:
         AUTOSTART.unlink(missing_ok=True)
+
+
+def dienst_entfernen():
+    if shutil.which("systemctl") and DIENST.exists():
+        subprocess.run(["systemctl", "--user", "disable", "--now", "crowns-helfer-tray.service"], capture_output=True)
+        DIENST.unlink(missing_ok=True)
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
 
 
 def tray_laeuft_stoppen():
