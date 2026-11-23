@@ -18,7 +18,11 @@ $Ordner = Join-Path $env:LOCALAPPDATA 'CrownsHelfer'
 $Aufgabe = 'Crowns & Cannons Helfer'
 $Auto = ($Modus -eq 'auto') -or ($Modus -eq 'tray')
 $Log = Join-Path $Ordner 'helfer.log'
-$Ua = @{ 'User-Agent' = 'crowns-helfer/1.0.0' }
+$Version = '1.1.0'
+$Ua = @{ 'User-Agent' = ('crowns-helfer/' + $Version) }
+# Neue Versionen des Helfers: neuestes Release auf GitHub
+$UpdateQuelle = 'https://api.github.com/repos/NiklasM-foss/Crowns-Helfer/releases/latest'
+if ($env:CROWNS_HELFER_UPDATE) { $UpdateQuelle = $env:CROWNS_HELFER_UPDATE }
 $Erlaubt = '^(mods|resourcepacks|datapacks|shaderpacks|kubejs)/'
 New-Item -ItemType Directory -Force -Path $Ordner | Out-Null
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -85,7 +89,9 @@ if ($Modus -eq '' -and $Selbst -and -not $Test) {
 if ($Modus -eq 'tray') {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $mutex = New-Object Threading.Mutex($false, 'Local\CrownsHelferTray')
-    if (-not $mutex.WaitOne(0)) { return }
+    try { $frei = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $frei = $true }  # alte Instanz beendet
+    if (-not $frei) { return }
+    $skriptStand = (Get-Item -LiteralPath $Skript -ErrorAction SilentlyContinue).LastWriteTimeUtc
     [Windows.Forms.Application]::EnableVisualStyles()
     $png = [Convert]::FromBase64String('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')
     $bmp = New-Object Drawing.Bitmap((New-Object IO.MemoryStream(, $png)))
@@ -197,6 +203,15 @@ if ($Modus -eq 'tray') {
         if ($script:proc -and $script:proc.HasExited) {
             $script:proc = $null
             $miJetzt.Enabled = $true
+            # Der Abgleich hat eine neue Version des Helfers installiert: mit der neuen Version neu starten
+            $jetzt = (Get-Item -LiteralPath $Skript -ErrorAction SilentlyContinue).LastWriteTimeUtc
+            if ($skriptStand -and $jetzt -and $jetzt -ne $skriptStand) {
+                $timer.Stop(); $ni.Visible = $false
+                try { $mutex.ReleaseMutex() } catch { }
+                Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + $TrayVbs + '"')
+                [Windows.Forms.Application]::Exit()
+                return
+            }
             $s = Status
             if ($s) {
                 $n = 0; foreach ($i in $s.instanzen) { $n += [int]$i.neu }
@@ -224,6 +239,37 @@ if ($Modus -eq 'tray') {
     [Windows.Forms.Application]::Run()
     $ni.Dispose()
     return
+}
+
+# ---- Helfer selbst aktualisieren ----
+# Holt das neueste Release von GitHub, prüft die SHA-256-Prüfsumme, die GitHub zu jeder Datei angibt, und ersetzt die
+# installierte Fassung. Die Taskleisten-App merkt das nach dem Abgleich und startet sich mit der neuen Version neu.
+function SelbstUpdate {
+    if (-not (Test-Path -LiteralPath $Skript)) { return }   # nicht eingerichtet
+    $rel = Invoke-RestMethod -Uri $UpdateQuelle -TimeoutSec 20 -Headers $Ua
+    $neu = ([string]$rel.tag_name).TrimStart('v', 'V')
+    $nv = $null
+    if (-not [version]::TryParse($neu, [ref]$nv) -or $nv -le [version]$Version) { return }
+    $a = @($rel.assets | Where-Object { $_.name -eq 'Crowns-Helfer.bat' })[0]
+    if (-not $a) { Schreib ('Helfer ' + $neu + ' ist erschienen, aber ohne Crowns-Helfer.bat'); return }
+    $soll = ([string]$a.digest) -replace '^sha256:', ''
+    if ($soll -notmatch '^[0-9a-fA-F]{64}$') { Schreib ('Helfer ' + $neu + ': keine Prüfsumme, Update übersprungen'); return }
+    $tmp = Join-Path $Ordner 'update.tmp'
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $a.browser_download_url -OutFile $tmp -TimeoutSec 120 -Headers $Ua
+        if ((Get-FileHash -LiteralPath $tmp -Algorithm SHA256).Hash -ne $soll.ToUpper()) { Schreib ('Helfer ' + $neu + ': Prüfsumme passt nicht, Update übersprungen'); return }
+        $roh = [IO.File]::ReadAllText($tmp)
+        $i = $roh.LastIndexOf('#' + '#PS##')
+        if ($i -lt 0 -or -not $roh.Contains("`$Version = '" + $neu + "'")) { Schreib ('Helfer ' + $neu + ': Datei passt nicht zur Version, Update übersprungen'); return }
+        $ps = $roh.Substring($i + 6)
+        [void][scriptblock]::Create($ps)   # Syntaxfehler -> Ausnahme, die alte Fassung bleibt
+        [IO.File]::WriteAllText($Skript, $ps, (New-Object Text.UTF8Encoding($true)))
+        Copy-Item -LiteralPath $tmp -Destination (Join-Path $Ordner 'Crowns-Helfer.bat') -Force
+        Schreib ('Helfer von ' + $Version + ' auf ' + $neu + ' aktualisiert')
+    } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+}
+if (($Modus -eq 'auto' -or $Modus -eq 'jetzt') -and -not $Test -and (-not $env:CROWNS_HELFER_QUELLE -or $env:CROWNS_HELFER_UPDATE)) {
+    try { SelbstUpdate } catch { Schreib ('Suche nach neuer Helfer-Version fehlgeschlagen: ' + $_.Exception.Message) }
 }
 
 # ---- Liste holen ----

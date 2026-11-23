@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Der Helfer aktualisiert sich selbst: neuestes Release auf GitHub, Prüfung per SHA-256, die Taskleisten-App startet
+  danach mit der neuen Version neu (Windows und Linux).
+- Linux: findet CurseForge-Instanzen auch im eingedeutschten Dokumente-Ordner (`xdg-user-dir DOCUMENTS`, `~/Dokumente`).
+- Windows: Taskleisten-App startet auch, wenn die vorige Instanz hart beendet wurde.
+
 ## 1.0.0
 
 - Erste Version: hält das Crowns-&-Cannons-Modpack automatisch aktuell (Mods, Ressourcenpakete, Datenpakete, Shader,

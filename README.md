@@ -59,6 +59,9 @@ Rechtsklick auf die Krone:
 - Alte Versionen derselben Mod entfernt er, aber nur Dateien, die das Pack früher selbst verteilt hat.
 - Das Java-Argument `-Dorg.lwjgl.system.allocator=system` setzt er, sobald die CurseForge-App geschlossen ist (die App
   würde die Einstellung sonst beim Beenden überschreiben).
+- Er aktualisiert sich selbst: Bei jedem Abgleich schaut er nach einem neueren Release auf GitHub, lädt es, prüft die
+  SHA-256-Prüfsumme, die GitHub zu jeder Datei angibt, und startet die Taskleisten-App mit der neuen Version neu. Mit
+  ausgeschaltetem automatischem Aktualisieren passiert das nur bei **Jetzt aktualisieren**.
 - Manche Mod-Autoren verbieten den Download durch Programme. Dann zeigt der Helfer dir den Link: Datei herunterladen,
   in deinem Downloads-Ordner liegen lassen, der Helfer legt sie automatisch an die richtige Stelle.
 
@@ -81,6 +84,16 @@ sie sind.
 Das Pack wird auf der Admin-Seite `https://editor.niklasmetzger.de/pack/admin/` gepflegt: Instanz-Ordner wählen,
 prüfen, veröffentlichen. Der Server-Teil liegt im Repository
 [Crowns-and-Cannons-Core](https://github.com/NiklasM-foss/Crowns-and-Cannons-Core) (Ordner `editor/`).
+
+## Neue Version veröffentlichen
+
+1. Versionsnummer in beiden Skripten erhöhen: `$Version = '1.2.0'` in `Crowns-Helfer.bat` und `VERSION = "1.2.0"` in
+   `crowns-helfer.py` (beide gleich, Semantic Versioning), `CHANGELOG.md` ergänzen.
+2. Auf GitHub ein Release mit dem Tag `v1.2.0` anlegen und als Dateien `Crowns-Helfer.bat`, `crowns-helfer.py` und
+   `install_cachyos.sh` anhängen, zum Beispiel
+   `gh release create v1.2.0 Crowns-Helfer.bat crowns-helfer.py install_cachyos.sh --notes-file <Notizen>`.
+3. Fertig: Alle installierten Helfer holen sich die neue Version beim nächsten Abgleich (spätestens nach 15 Minuten).
+   Ein Release ohne die passende Datei, mit anderer Versionsnummer in der Datei oder mit Syntaxfehler wird übersprungen.
 
 ## Lizenz
 

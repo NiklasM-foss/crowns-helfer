@@ -31,7 +31,10 @@ QUELLE = os.environ.get("CROWNS_HELFER_QUELLE", "https://editor.niklasmetzger.de
 HOME = Path.home()
 ORDNER = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "crowns-helfer"
 LOG = ORDNER / "helfer.log"
-UA = {"User-Agent": "crowns-helfer/1.0.0"}
+VERSION = "1.1.0"
+UA = {"User-Agent": "crowns-helfer/" + VERSION}
+# Neue Versionen des Helfers: neuestes Release auf GitHub
+UPDATE_QUELLE = os.environ.get("CROWNS_HELFER_UPDATE", "https://api.github.com/repos/NiklasM-foss/Crowns-Helfer/releases/latest")
 ERLAUBT = re.compile(r"^(mods|resourcepacks|datapacks|shaderpacks|kubejs)/")
 DOWNLOADS = Path(os.environ.get("CROWNS_HELFER_DOWNLOADS", "") or (HOME / "Downloads"))
 AUTO = len(sys.argv) > 1 and sys.argv[1] in ("auto", "tray")
@@ -155,7 +158,16 @@ def wurzeln():
             w += [Path(mc["minecraftRoot"]) / "Instances", Path(mc["minecraftRoot"]) / "minecraft/Instances"]
     except Exception:
         pass
-    w += [HOME / "curseforge/minecraft/Instances", HOME / "Documents/curseforge/minecraft/Instances",
+    # Dokumente-Ordner kann eingedeutscht sein (xdg-user-dir DOCUMENTS, z.B. ~/Dokumente)
+    dok = [HOME / "Documents", HOME / "Dokumente"]
+    try:
+        r = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and r.stdout.strip():
+            dok.insert(0, Path(r.stdout.strip()))
+    except Exception:
+        pass
+    w += [d / "curseforge/minecraft/Instances" for d in dok]
+    w += [HOME / "curseforge/minecraft/Instances",
           HOME / ".local/share/PrismLauncher/instances", HOME / ".var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances",
           HOME / ".local/share/multimc/instances"]
     return list(dict.fromkeys(w))
@@ -330,7 +342,57 @@ def jvm_prism(pack, cfg):
     schreib("  Java-Argument gesetzt (Prism): " + neu)
 
 
+def _version(v):
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except ValueError:
+        return None
+
+
+def selbst_update():
+    """Neuestes Release von GitHub holen, SHA-256 gegen die Angabe von GitHub pruefen und die installierte Fassung
+    ersetzen. Die Taskleisten-App merkt das nach dem Abgleich und startet sich mit der neuen Version neu."""
+    ziel = ORDNER / "crowns-helfer.py"
+    if not ziel.exists():
+        return  # nicht eingerichtet
+    with urllib.request.urlopen(urllib.request.Request(UPDATE_QUELLE, headers=UA), timeout=20) as r:
+        rel = json.loads(r.read().decode("utf-8"))
+    neu = str(rel.get("tag_name", "")).lstrip("vV")
+    nv, av = _version(neu), _version(VERSION)
+    if not nv or not av or nv <= av:
+        return
+    a = next((x for x in rel.get("assets", []) if x.get("name") == "crowns-helfer.py"), None)
+    if not a:
+        schreib(f"Helfer {neu} ist erschienen, aber ohne crowns-helfer.py")
+        return
+    soll = str(a.get("digest") or "").lower()
+    soll = soll[7:] if soll.startswith("sha256:") else soll
+    if not re.fullmatch(r"[0-9a-f]{64}", soll):
+        schreib(f"Helfer {neu}: keine Prüfsumme, Update übersprungen")
+        return
+    with urllib.request.urlopen(urllib.request.Request(a["browser_download_url"], headers=UA), timeout=120) as r:
+        daten = r.read()
+    if hashlib.sha256(daten).hexdigest() != soll:
+        schreib(f"Helfer {neu}: Prüfsumme passt nicht, Update übersprungen")
+        return
+    text = daten.decode("utf-8")
+    if f'VERSION = "{neu}"' not in text:
+        schreib(f"Helfer {neu}: Datei passt nicht zur Version, Update übersprungen")
+        return
+    compile(text, str(ziel), "exec")  # Syntaxfehler -> Ausnahme, die alte Fassung bleibt
+    tmp = ziel.with_suffix(".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.chmod(0o755)
+    tmp.replace(ziel)
+    schreib(f"Helfer von {VERSION} auf {neu} aktualisiert")
+
+
 def abgleichen():
+    if not TEST_WURZEL and (not os.environ.get("CROWNS_HELFER_QUELLE") or os.environ.get("CROWNS_HELFER_UPDATE")):
+        try:
+            selbst_update()
+        except Exception as e:
+            schreib(f"Suche nach neuer Helfer-Version fehlgeschlagen: {e}")
     pack = liste()
     if not pack:
         return
@@ -486,6 +548,13 @@ def tray():
     zustand = {"proc": None, "manuell": "", "cf": cf_laeuft(), "fenster": None}
     skript = str(ORDNER / "crowns-helfer.py") if (ORDNER / "crowns-helfer.py").exists() else str(Path(__file__).resolve())
 
+    def skript_stand():
+        try:
+            return os.stat(skript).st_mtime_ns
+        except OSError:
+            return None
+    stand = skript_stand()
+
     def status():
         try:
             return json.loads(STATUS.read_text(encoding="utf-8"))
@@ -506,6 +575,10 @@ def tray():
 
     def fertig(*_):
         a_jetzt.setEnabled(True)
+        # Der Abgleich hat eine neue Version des Helfers installiert: Prozess durch die neue Version ersetzen
+        if stand is not None and skript_stand() not in (None, stand):
+            ti.hide()
+            os.execv(sys.executable or "/usr/bin/python3", [sys.executable or "python3", skript, "tray"])
         s = status()
         if not s:
             return
